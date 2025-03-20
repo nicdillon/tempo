@@ -67,7 +67,7 @@ export class MemStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
     const preferences = {
-      theme: 'system',
+      theme: 'system' as 'light' | 'dark' | 'system',
       accentColor: '#FF5252',
       soundNotifications: true,
       browserNotifications: true
@@ -154,7 +154,13 @@ export class MemStorage implements IStorage {
 
   async createCategory(category: InsertCategory): Promise<Category> {
     const id = this.currentCategoryId++;
-    const newCategory: Category = { ...category, id, createdAt: new Date() };
+    const newCategory: Category = { 
+      ...category, 
+      id, 
+      createdAt: new Date(),
+      // Ensure isPreset is a boolean (not undefined)
+      isPreset: category.isPreset ?? false
+    };
     this.categories.set(id, newCategory);
     return newCategory;
   }
@@ -184,7 +190,9 @@ export class MemStorage implements IStorage {
       ...session, 
       id,
       completed: false,
-      endTime: null
+      endTime: null,
+      // Ensure pomodoroData is not undefined
+      pomodoroData: session.pomodoroData ?? null
     };
     
     this.timerSessions.set(id, newSession);

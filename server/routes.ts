@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import Stripe from "stripe";
+import session from "express-session";
 import { storage } from "./storage";
 import { insertUserSchema, loginSchema, registerSchema } from "@shared/schema";
 import { z } from "zod";
@@ -14,16 +15,20 @@ let stripe: Stripe | undefined;
 
 if (STRIPE_SECRET_KEY) {
   stripe = new Stripe(STRIPE_SECRET_KEY, {
-    apiVersion: "2023-10-16",
+    apiVersion: "2024-01-24" as any,
   });
 } else {
   console.warn("Missing STRIPE_SECRET_KEY - payment features will not work");
 }
 
-// Define session type with user
-declare module "express-session" {
-  interface SessionData {
-    userId?: number;
+// Add session type to Express Request
+declare global {
+  namespace Express {
+    interface Request {
+      session: session.Session & Partial<session.SessionData> & {
+        userId?: number;
+      };
+    }
   }
 }
 
@@ -114,7 +119,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Logout
   app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy((err) => {
+    req.session.userId = undefined;
+    req.session.save((err) => {
       if (err) {
         return res.status(500).json({ message: "Error logging out" });
       }
@@ -130,7 +136,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     const user = await storage.getUser(req.session.userId);
     if (!user) {
-      req.session.destroy(() => {});
+      req.session.userId = undefined;
+      req.session.save(() => {});
       return res.status(401).json({ message: "User not found" });
     }
     
@@ -332,9 +339,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         case 'customer.subscription.created':
           // Update user subscription status
           const subscription = event.data.object;
-          const user = Array.from(storage.getUser).find(
-            (user) => user.stripeSubscriptionId === subscription.id
+          
+          // Find all users
+          const users = await Promise.all(
+            Array.from({ length: 100 }, (_, i) => i + 1)
+              .map(id => storage.getUser(id))
           );
+          
+          // Find user with matching subscription ID
+          const user = users
+            .filter(Boolean)
+            .find(u => u?.stripeSubscriptionId === subscription.id);
           
           if (user) {
             await storage.updateUserSubscription(
@@ -346,9 +361,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         case 'customer.subscription.deleted':
           // Handle subscription cancellation
           const canceledSubscription = event.data.object;
-          const userToCancel = Array.from(storage.getUser).find(
-            (user) => user.stripeSubscriptionId === canceledSubscription.id
+          
+          // Find all users
+          const allUsers = await Promise.all(
+            Array.from({ length: 100 }, (_, i) => i + 1)
+              .map(id => storage.getUser(id))
           );
+          
+          // Find user with matching subscription ID
+          const userToCancel = allUsers
+            .filter(Boolean)
+            .find(u => u?.stripeSubscriptionId === canceledSubscription.id);
           
           if (userToCancel) {
             await storage.updateUserSubscription(userToCancel.id, false);
