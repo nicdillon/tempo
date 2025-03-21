@@ -12,6 +12,7 @@ import AnalyticsPage from "@/pages/analytics";
 import SessionsPage from "@/pages/sessions";
 import SettingsPage from "@/pages/settings";
 import SubscribePage from "@/pages/subscribe";
+import CheckoutPage from "@/pages/checkout";
 
 function Router() {
   return (
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/sessions" component={SessionsPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/subscribe" component={SubscribePage} />
+      <Route path="/checkout" component={CheckoutPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -23,9 +23,12 @@ export function UpgradePrompt({ className }: UpgradePromptProps) {
                 and more.
               </p>
             </div>
-            <div className="mt-4">
+            <div className="mt-4 flex flex-col sm:flex-row gap-3">
               <Button asChild className="bg-amber-500 hover:bg-amber-600">
-                <Link href="/subscribe">Upgrade Now</Link>
+                <Link href="/subscribe">Subscribe</Link>
+              </Button>
+              <Button asChild variant="outline" className="border-amber-500 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/20">
+                <Link href="/checkout">One-time Purchase</Link>
               </Button>
             </div>
           </div>
