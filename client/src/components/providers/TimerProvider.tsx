@@ -3,6 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import { showNotification, playSound } from "@/lib/utils";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
+import { useLocation } from 'wouter';
 // Import will be handled differently to avoid circular dependency
 
 export type TimerType = "countdown" | "stopwatch" | "pomodoro";
@@ -37,6 +38,7 @@ interface TimerContextType {
 export const TimerContext = createContext<TimerContextType | null>(null);
 
 export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [location] = useLocation();
   // Timer state
   const [timerType, setTimerType] = useState<TimerType>(() => {
     const saved = localStorage.getItem('timerType');
@@ -98,6 +100,14 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const startTimeRef = useRef<number>(0);
   const { toast } = useToast();
   const { user, isPremium } = useAuth();
+
+  // Auto-minimize timer when navigating away from home page
+  useEffect(() => {
+    if (location !== '/' && isRunning) {
+      // Auto-minimize the timer when navigating away from home if it's running
+      setMinimizedTimer(true);
+    }
+  }, [location, isRunning]);
 
   // Save state to localStorage
   useEffect(() => {
