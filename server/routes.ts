@@ -15,7 +15,7 @@ let stripe: Stripe | undefined;
 
 if (STRIPE_SECRET_KEY) {
   stripe = new Stripe(STRIPE_SECRET_KEY, {
-    apiVersion: "2024-01-24" as any,
+    apiVersion: "2025-02-24.acacia",
   });
 } else {
   console.warn("Missing STRIPE_SECRET_KEY - payment features will not work");
