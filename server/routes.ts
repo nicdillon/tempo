@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import Stripe from "stripe";
 import session from "express-session";
@@ -21,33 +21,31 @@ if (STRIPE_SECRET_KEY) {
   console.warn("Missing STRIPE_SECRET_KEY - payment features will not work");
 }
 
-// Add session type to Express Request
-declare global {
-  namespace Express {
-    interface Request {
-      session: session.Session & Partial<session.SessionData> & {
-        userId?: number;
-      };
-    }
+// Add userId to session data
+declare module 'express-session' {
+  interface SessionData {
+    userId?: number;
   }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
-  const requireAuth = (req: Request, res: Response, next: Function) => {
-    if (!req.session.userId) {
+  const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+    const session = req.session as session.Session & { userId?: number };
+    if (!session.userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
     next();
   };
 
   // Subscription middleware
-  const requireSubscription = async (req: Request, res: Response, next: Function) => {
-    if (!req.session.userId) {
+  const requireSubscription = async (req: Request, res: Response, next: NextFunction) => {
+    const session = req.session as session.Session & { userId?: number };
+    if (!session.userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const user = await storage.getUser(req.session.userId);
+    const user = await storage.getUser(session.userId);
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
@@ -130,14 +128,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get current user
   app.get("/api/auth/me", async (req, res) => {
-    if (!req.session.userId) {
+    const session = req.session as session.Session & { userId?: number };
+    if (!session.userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
     
-    const user = await storage.getUser(req.session.userId);
+    const user = await storage.getUser(session.userId);
     if (!user) {
-      req.session.userId = undefined;
-      req.session.save(() => {});
+      session.userId = undefined;
+      session.save(() => {});
       return res.status(401).json({ message: "User not found" });
     }
     
@@ -324,7 +323,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If user already has a subscription, return it
       if (user.stripeSubscriptionId) {
         console.log("User already has subscription:", user.stripeSubscriptionId);
-        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId, {
+          expand: ['latest_invoice.payment_intent']
+        }) as Stripe.Subscription & { 
+          latest_invoice: Stripe.Invoice & { 
+            payment_intent: Stripe.PaymentIntent 
+          } 
+        };
         
         return res.json({
           subscriptionId: subscription.id,
@@ -348,7 +353,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }],
         payment_behavior: 'default_incomplete',
         expand: ['latest_invoice.payment_intent'],
-      });
+      }) as Stripe.Subscription & { 
+        latest_invoice: Stripe.Invoice & { 
+          payment_intent: Stripe.PaymentIntent 
+        } 
+      };
       
       // Update user's Stripe info but don't mark as subscribed yet
       // We'll wait for the webhook to confirm payment success
