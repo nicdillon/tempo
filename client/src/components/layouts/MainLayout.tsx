@@ -128,14 +128,14 @@ export function MainLayout({ children }: MainLayoutProps) {
           <nav className="flex space-x-8" aria-label="Tabs">
             {navItems.map((item) => {
               const isActive = location === item.path;
-              // If user is logged in, use regular premium route logic
-              // If not logged in, always allow access to show demo data
-              const isPremiumRoute = user ? (item.premium && !isPremium) : false;
+              // Always allow access to all routes to show demo data for both non-logged-in users
+              // and free tier users
+              const isPremiumRoute = false; // No longer redirect to /subscribe
 
               return (
                 <Link
                   key={item.name}
-                  href={isPremiumRoute ? "/subscribe" : item.path}
+                  href={item.path}
                   className={cn(
                     "inline-flex items-center py-4 px-1 border-b-2 text-sm font-medium",
                     isActive
@@ -145,7 +145,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                   )}
                 >
                   {item.name}
-                  {/* Only show lock for logged-in users who aren't premium */}
+                  {/* Show a lock icon for premium features if user is not premium */}
                   {item.premium && user && !isPremium && (
                     <LockIcon className="h-3 w-3 ml-1" />
                   )}
