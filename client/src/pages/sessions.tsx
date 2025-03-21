@@ -99,10 +99,23 @@ export default function SessionsPage() {
     }).format(date);
   };
 
+  // Define session type
+  interface TimerSession {
+    id: number;
+    userId: number;
+    categoryId: number;
+    timerType: string;
+    duration: number;
+    startTime: string;
+    endTime?: string;
+    completed: boolean;
+  }
+
   // Filter sessions by category
+  const sessionsArray = Array.isArray(sessions) ? sessions as TimerSession[] : [];
   const filteredSessions = categoryFilter === "all"
-    ? sessions
-    : sessions?.filter(session => session.categoryId.toString() === categoryFilter);
+    ? sessionsArray
+    : sessionsArray.filter((session: TimerSession) => session.categoryId.toString() === categoryFilter);
 
   // Get category name and color
   const getCategoryInfo = (categoryId: number) => {
@@ -291,7 +304,7 @@ export default function SessionsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredSessions.map((session) => {
+                  {filteredSessions.map((session: TimerSession) => {
                     const category = getCategoryInfo(session.categoryId);
                     return (
                       <TableRow key={session.id}>

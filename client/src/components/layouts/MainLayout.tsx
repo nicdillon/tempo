@@ -123,37 +123,38 @@ export function MainLayout({ children }: MainLayoutProps) {
       </header>
 
       {/* Navigation tabs */}
-      {user && (
-        <div className="border-b border-border">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <nav className="flex space-x-8" aria-label="Tabs">
-              {navItems.map((item) => {
-                const isActive = location === item.path;
-                const isPremiumRoute = item.premium && !isPremium;
+      <div className="border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex space-x-8" aria-label="Tabs">
+            {navItems.map((item) => {
+              const isActive = location === item.path;
+              // If user is logged in, use regular premium route logic
+              // If not logged in, always allow access to show demo data
+              const isPremiumRoute = user ? (item.premium && !isPremium) : false;
 
-                return (
-                  <Link
-                    key={item.name}
-                    href={isPremiumRoute ? "/subscribe" : item.path}
-                    className={cn(
-                      "inline-flex items-center py-4 px-1 border-b-2 text-sm font-medium",
-                      isActive
-                        ? "border-primary text-primary"
-                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
-                      "transition-colors"
-                    )}
-                  >
-                    {item.name}
-                    {item.premium && !isPremium && (
-                      <LockIcon className="h-3 w-3 ml-1" />
-                    )}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
+              return (
+                <Link
+                  key={item.name}
+                  href={isPremiumRoute ? "/subscribe" : item.path}
+                  className={cn(
+                    "inline-flex items-center py-4 px-1 border-b-2 text-sm font-medium",
+                    isActive
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
+                    "transition-colors"
+                  )}
+                >
+                  {item.name}
+                  {/* Only show lock for logged-in users who aren't premium */}
+                  {item.premium && user && !isPremium && (
+                    <LockIcon className="h-3 w-3 ml-1" />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
-      )}
+      </div>
 
       {/* Main content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
