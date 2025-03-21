@@ -31,6 +31,8 @@ function SubscriptionForm() {
   const [loading, setLoading] = useState(false);
   const [, setLocation] = useLocation();
 
+  const { refreshUser } = useAuth();
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -56,11 +58,16 @@ function SubscriptionForm() {
           variant: "destructive",
         });
       } else {
+        // If payment was successful, refresh user data to update premium status
+        await refreshUser();
+        
         toast({
           title: "Payment Successful",
           description: "You are now a premium member!",
         });
-        setLocation("/");
+        
+        // Add a small delay to allow the toast to be seen
+        setTimeout(() => setLocation("/"), 1500);
       }
     } catch (err) {
       console.error("Payment error:", err);

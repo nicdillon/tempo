@@ -331,6 +331,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } 
         };
         
+        // Check if subscription is active but user is not marked as subscribed
+        // This handles the case where webhook didn't trigger (common in development)
+        if (subscription.status === 'active' && !user.isSubscribed) {
+          console.log("Subscription is active but user not marked as premium. Updating status...");
+          await storage.updateUserSubscription(user.id, true);
+          
+          // Send a success response with instructions to reload the page
+          return res.json({
+            subscriptionId: subscription.id,
+            clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+            premiumActivated: true,
+            message: "Your subscription is active! Premium features are now enabled."
+          });
+        }
+        
         return res.json({
           subscriptionId: subscription.id,
           clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,

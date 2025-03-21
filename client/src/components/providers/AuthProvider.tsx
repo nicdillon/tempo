@@ -23,6 +23,7 @@ type AuthContextType = {
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   isPremium: boolean;
 };
 
