@@ -7,7 +7,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserSubscription(userId: number, isSubscribed: boolean): Promise<User>;
-  updateUserStripeInfo(userId: number, stripeInfo: { customerId: string, subscriptionId: string }): Promise<User>;
+  updateUserStripeInfo(userId: number, stripeInfo: { customerId: string, subscriptionId: string, markAsSubscribed?: boolean }): Promise<User>;
   updateUserPreferences(userId: number, preferences: any): Promise<User>;
   
   // Category methods
@@ -110,7 +110,14 @@ export class MemStorage implements IStorage {
     return updatedUser;
   }
 
-  async updateUserStripeInfo(userId: number, stripeInfo: { customerId: string, subscriptionId: string }): Promise<User> {
+  async updateUserStripeInfo(
+    userId: number, 
+    stripeInfo: { 
+      customerId: string, 
+      subscriptionId: string, 
+      markAsSubscribed?: boolean 
+    }
+  ): Promise<User> {
     const user = await this.getUser(userId);
     if (!user) throw new Error('User not found');
     
@@ -118,7 +125,8 @@ export class MemStorage implements IStorage {
       ...user, 
       stripeCustomerId: stripeInfo.customerId,
       stripeSubscriptionId: stripeInfo.subscriptionId,
-      isSubscribed: true
+      // Only mark as subscribed if explicitly requested (for completed payments)
+      isSubscribed: stripeInfo.markAsSubscribed === false ? false : true
     };
     
     this.users.set(userId, updatedUser);

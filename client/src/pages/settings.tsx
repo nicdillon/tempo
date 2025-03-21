@@ -5,6 +5,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { AccentPicker } from "@/components/ui/accentPicker";
 import { requestNotificationPermission, canUseNotifications } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import {
   Card,
   CardContent,
@@ -12,6 +13,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -24,13 +36,16 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { MoonIcon, SunIcon, MonitorIcon, CrownIcon, LogOutIcon } from "lucide-react";
 
 export default function SettingsPage() {
   const { user, logout, isPremium } = useAuth();
   const { theme, setTheme, updateUserPreferences } = useTheme();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
   const [soundNotifications, setSoundNotifications] = useState<boolean>(
     user?.preferences?.soundNotifications ?? true
   );
@@ -67,9 +82,66 @@ export default function SettingsPage() {
       updateUserPreferences(preferences);
     }
   };
+  
+  // Handle cancellation of subscription
+  const handleCancelSubscription = () => {
+    setCancelDialogOpen(true);
+  };
+  
+  // Perform the actual cancellation
+  const performCancellation = async () => {
+    try {
+      setCancelLoading(true);
+      const response = await apiRequest('POST', '/api/cancel-subscription');
+      
+      if (response.ok) {
+        toast({
+          title: "Subscription Canceled",
+          description: "Your premium subscription has been canceled.",
+        });
+        
+        // Reload page to update UI
+        window.location.reload();
+      } else {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to cancel subscription");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "An error occurred while canceling your subscription.",
+        variant: "destructive",
+      });
+    } finally {
+      setCancelLoading(false);
+      setCancelDialogOpen(false);
+    }
+  };
 
   return (
     <MainLayout>
+      {/* Cancel Subscription Confirmation Dialog */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Subscription?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel your premium subscription? You will lose access to premium features immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={performCancellation}
+              disabled={cancelLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cancelLoading ? "Canceling..." : "Yes, Cancel Subscription"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
       <div className="space-y-6 max-w-4xl mx-auto">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Settings</h1>
@@ -204,7 +276,15 @@ export default function SettingsPage() {
                       )}
                     </div>
                   </div>
-                  {!isPremium && (
+                  {isPremium ? (
+                    <Button 
+                      variant="outline" 
+                      onClick={handleCancelSubscription} 
+                      className="text-destructive border-destructive hover:bg-destructive/10"
+                    >
+                      Cancel Subscription
+                    </Button>
+                  ) : (
                     <Button asChild className="bg-amber-500 hover:bg-amber-600">
                       <Link href="/subscribe">
                         <CrownIcon className="h-4 w-4 mr-2" />

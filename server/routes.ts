@@ -267,6 +267,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Stripe Routes =====
+  // Cancel subscription
+  app.post("/api/cancel-subscription", requireAuth, async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ message: "Stripe is not configured" });
+      }
+      
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      if (!user.stripeSubscriptionId) {
+        return res.status(400).json({ message: "No active subscription found" });
+      }
+      
+      console.log("Canceling subscription:", user.stripeSubscriptionId);
+      
+      // Cancel the subscription in Stripe
+      await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: true
+      });
+      
+      // Update user status immediately (optional, can also wait for webhook)
+      await storage.updateUserSubscription(user.id, false);
+      
+      res.json({ message: "Subscription canceled successfully" });
+    } catch (error: any) {
+      console.error("Error canceling subscription:", error);
+      return res.status(400).json({ 
+        message: "Error canceling subscription", 
+        error: error.message 
+      });
+    }
+  });
+  
   // Create subscription
   app.post("/api/create-subscription", requireAuth, async (req, res) => {
     try {
@@ -314,10 +350,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expand: ['latest_invoice.payment_intent'],
       });
       
-      // Update user with Stripe info
+      // Update user's Stripe info but don't mark as subscribed yet
+      // We'll wait for the webhook to confirm payment success
       await storage.updateUserStripeInfo(user.id, {
         customerId: customer.id,
-        subscriptionId: subscription.id
+        subscriptionId: subscription.id,
+        // Important: Don't mark as subscribed yet until payment is confirmed
+        markAsSubscribed: false
       });
       
       console.log("Subscription created successfully:", subscription.id);
