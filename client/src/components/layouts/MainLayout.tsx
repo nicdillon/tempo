@@ -145,8 +145,8 @@ export function MainLayout({ children }: MainLayoutProps) {
                   )}
                 >
                   {item.name}
-                  {/* Show a lock icon for premium features if user is not premium */}
-                  {item.premium && user && !isPremium && (
+                  {/* Show a lock icon for premium features for both anonymous and free users */}
+                  {item.premium && (!user || (user && !isPremium)) && (
                     <LockIcon className="h-3 w-3 ml-1" />
                   )}
                 </Link>
