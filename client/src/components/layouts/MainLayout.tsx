@@ -58,11 +58,16 @@ export function MainLayout({ children }: MainLayoutProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                onClick={() => {
+                  // Toggle between light and dark regardless of current theme (including system)
+                  const htmlElement = document.documentElement;
+                  const isDark = htmlElement.classList.contains('dark');
+                  setTheme(isDark ? "light" : "dark");
+                }}
                 className="mr-2"
-                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                aria-label={document.documentElement.classList.contains('dark') ? "Switch to light mode" : "Switch to dark mode"}
               >
-                {theme === "dark" ? (
+                {document.documentElement.classList.contains('dark') ? (
                   <SunIcon className="h-5 w-5" />
                 ) : (
                   <MoonIcon className="h-5 w-5" />
@@ -113,7 +118,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <Button asChild variant="default">
+                <Button asChild variant="default" className="bg-primary text-primary-foreground hover:bg-primary/90">
                   <Link href="/login">Login</Link>
                 </Button>
               )}

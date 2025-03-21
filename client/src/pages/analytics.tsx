@@ -110,7 +110,7 @@ export default function AnalyticsPage() {
                   Get detailed insights into your time usage patterns. Upgrade to premium to see your personal analytics dashboard.
                 </p>
                 {user ? (
-                  <Button asChild className="bg-amber-500 hover:bg-amber-600">
+                  <Button asChild className="bg-amber-500 hover:bg-amber-600 text-white">
                     <Link href="/subscribe" className="inline-flex items-center">
                       Upgrade to Premium
                       <ArrowRightIcon className="ml-2 h-4 w-4" />
@@ -118,10 +118,10 @@ export default function AnalyticsPage() {
                   </Button>
                 ) : (
                   <div className="flex space-x-4 justify-center">
-                    <Button asChild>
+                    <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
                       <Link href="/login">Log In</Link>
                     </Button>
-                    <Button asChild variant="outline">
+                    <Button asChild variant="outline" className="border-primary text-primary hover:bg-primary/10">
                       <Link href="/register">Register</Link>
                     </Button>
                   </div>
