@@ -101,16 +101,43 @@ export default function SubscribePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  // Redirect to home if user is already premium
+  // Check user subscription status
+  const [isCancelled, setIsCancelled] = useState(false);
+  
   useEffect(() => {
+    const checkSubscriptionStatus = async () => {
+      if (user?.stripeSubscriptionId && isPremium) {
+        try {
+          const response = await apiRequest("GET", `/api/subscription-status`);
+          const data = await response.json();
+          
+          if (data.isCancelled) {
+            setIsCancelled(true);
+          } else {
+            // Redirect home if premium and not cancelled
+            toast({
+              title: "Already Subscribed",
+              description: "You are already a premium member",
+            });
+            setLocation("/");
+          }
+        } catch (error) {
+          console.error("Error checking subscription status:", error);
+        }
+      } else if (isPremium) {
+        // Redirect home if premium with no subscription ID (legacy premium account)
+        toast({
+          title: "Already Subscribed",
+          description: "You are already a premium member",
+        });
+        setLocation("/");
+      }
+    };
+    
     if (isPremium) {
-      toast({
-        title: "Already Subscribed",
-        description: "You are already a premium member",
-      });
-      setLocation("/");
+      checkSubscriptionStatus();
     }
-  }, [isPremium, setLocation, toast]);
+  }, [isPremium, setLocation, toast, user]);
 
   // Create subscription when the page loads
   useEffect(() => {

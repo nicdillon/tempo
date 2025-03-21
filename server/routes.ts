@@ -140,14 +140,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: "User not found" });
     }
     
-    // Check if user has an active subscription but isn't marked as premium
+    // Check subscription status
     // This is important for development environments where webhooks don't work
-    if (stripe && user.stripeSubscriptionId && !user.isSubscribed) {
+    if (stripe && user.stripeSubscriptionId) {
       try {
         const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-        if (subscription.status === 'active') {
+        
+        // If subscription is active and user isn't marked as premium
+        if (subscription.status === 'active' && !subscription.cancel_at_period_end && !user.isSubscribed) {
           console.log("Found active subscription but user not marked as premium. Updating status...");
           await storage.updateUserSubscription(user.id, true);
+          // Get updated user data
+          const updatedUser = await storage.getUser(user.id);
+          if (updatedUser) {
+            user = updatedUser;
+          }
+        }
+        
+        // If subscription is cancelled and user is still marked as premium
+        if (subscription.cancel_at_period_end && user.isSubscribed) {
+          console.log("Subscription is canceled but user still marked as premium. Removing premium status...");
+          await storage.updateUserSubscription(user.id, false);
           // Get updated user data
           const updatedUser = await storage.getUser(user.id);
           if (updatedUser) {
@@ -308,8 +321,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cancel_at_period_end: true
       });
       
-      // Update user status immediately (optional, can also wait for webhook)
-      await storage.updateUserSubscription(user.id, false);
+      // We won't update user status immediately anymore
+      // This will happen during profile fetch based on the subscription's cancel_at_period_end flag
+      // await storage.updateUserSubscription(user.id, false);
       
       res.json({ message: "Subscription canceled successfully" });
     } catch (error: any) {
@@ -321,6 +335,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Check subscription status
+  app.get("/api/subscription-status", requireAuth, async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ message: "Stripe is not configured" });
+      }
+      
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      if (!user.stripeSubscriptionId) {
+        return res.json({ 
+          isActive: false,
+          isCancelled: false,
+          message: "No subscription found" 
+        });
+      }
+      
+      // Get subscription details from Stripe
+      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+      
+      return res.json({
+        isActive: subscription.status === 'active',
+        isCancelled: subscription.cancel_at_period_end,
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        status: subscription.status
+      });
+    } catch (error: any) {
+      console.error("Error checking subscription status:", error);
+      return res.status(400).json({ 
+        message: "Error checking subscription status", 
+        error: error.message 
+      });
+    }
+  });
+
   // Create subscription
   app.post("/api/create-subscription", requireAuth, async (req, res) => {
     try {

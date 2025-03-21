@@ -9,6 +9,8 @@ type User = {
   username: string;
   email: string;
   isSubscribed: boolean;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
   preferences: {
     theme: 'light' | 'dark' | 'system';
     accentColor: string;
