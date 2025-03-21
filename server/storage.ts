@@ -126,7 +126,7 @@ export class MemStorage implements IStorage {
       stripeCustomerId: stripeInfo.customerId,
       stripeSubscriptionId: stripeInfo.subscriptionId,
       // Only mark as subscribed if explicitly requested (for completed payments)
-      isSubscribed: stripeInfo.markAsSubscribed === false ? false : true
+      isSubscribed: stripeInfo.markAsSubscribed ?? user.isSubscribed
     };
     
     this.users.set(userId, updatedUser);
