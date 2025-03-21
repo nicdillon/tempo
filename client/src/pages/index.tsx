@@ -5,7 +5,7 @@ import { TimerControls } from "@/components/timer/TimerControls";
 import { CategorySelector } from "@/components/timer/CategorySelector";
 import { PomodoroSettings } from "@/components/timer/PomodoroSettings";
 import { CountdownSettings } from "@/components/timer/CountdownSettings";
-import { TimerMinimal } from "@/components/timer/TimerMinimal";
+
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useGlobalTimer } from "@/components/providers/TimerProvider";
 import { useCategories } from "@/hooks/use-categories";
@@ -152,12 +152,7 @@ export default function HomePage() {
             )}
           </div>
           
-          {/* Render the minimal timer if minimized */}
-          {minimizedTimer && isRunning && (
-            <div style={{ display: 'none' }}>
-              <TimerMinimal />
-            </div>
-          )}
+          {/* Minimized timer is now handled by GlobalTimerDisplay component */}
 
           {/* Premium Upgrade Prompt (show only for non-premium users) */}
           {user && !isPremium && (
