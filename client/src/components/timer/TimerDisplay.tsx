@@ -52,7 +52,7 @@ export function TimerDisplay({
       )}
       
       {/* Timer display */}
-      <div className="font-mono text-8xl font-bold tracking-tight py-8 tabular-nums">
+      <div className="font-mono text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-bold tracking-tight py-4 md:py-8 tabular-nums max-w-full overflow-hidden">
         {formatTime(time)}
       </div>
     </div>

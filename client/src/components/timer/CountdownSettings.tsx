@@ -21,7 +21,7 @@ export function CountdownSettings({
   disabled = false,
 }: CountdownSettingsProps) {
   return (
-    <div className="flex justify-center space-x-4 mb-6">
+    <div className="flex justify-center space-x-3 md:space-x-4 mb-6">
       <div className="space-y-1">
         <Label htmlFor="hours" className="text-xs text-center block">
           Hours
@@ -33,7 +33,7 @@ export function CountdownSettings({
           max={23}
           value={hours}
           onChange={(e) => onHoursChange(parseInt(e.target.value) || 0)}
-          className="w-16 text-center h-9"
+          className="w-14 sm:w-16 text-center h-9 px-2"
           disabled={disabled}
         />
       </div>
@@ -48,7 +48,7 @@ export function CountdownSettings({
           max={59}
           value={minutes}
           onChange={(e) => onMinutesChange(parseInt(e.target.value) || 0)}
-          className="w-16 text-center h-9"
+          className="w-14 sm:w-16 text-center h-9 px-2"
           disabled={disabled}
         />
       </div>
@@ -63,7 +63,7 @@ export function CountdownSettings({
           max={59}
           value={seconds}
           onChange={(e) => onSecondsChange(parseInt(e.target.value) || 0)}
-          className="w-16 text-center h-9"
+          className="w-14 sm:w-16 text-center h-9 px-2"
           disabled={disabled}
         />
       </div>

@@ -21,7 +21,7 @@ export function PomodoroSettings({
   disabled = false,
 }: PomodoroSettingsProps) {
   return (
-    <div className="flex justify-center space-x-4 mb-6">
+    <div className="flex justify-center space-x-3 md:space-x-4 mb-6">
       <div className="space-y-1">
         <Label htmlFor="work-minutes" className="text-xs text-center block">
           Work (min)
@@ -33,7 +33,7 @@ export function PomodoroSettings({
           max={60}
           value={workMinutes}
           onChange={(e) => onWorkMinutesChange(parseInt(e.target.value) || 25)}
-          className="w-16 text-center h-9"
+          className="w-14 sm:w-16 text-center h-9 px-2"
           disabled={disabled}
         />
       </div>
@@ -48,7 +48,7 @@ export function PomodoroSettings({
           max={30}
           value={breakMinutes}
           onChange={(e) => onBreakMinutesChange(parseInt(e.target.value) || 5)}
-          className="w-16 text-center h-9"
+          className="w-14 sm:w-16 text-center h-9 px-2"
           disabled={disabled}
         />
       </div>
@@ -63,7 +63,7 @@ export function PomodoroSettings({
           max={10}
           value={cycles}
           onChange={(e) => onCyclesChange(parseInt(e.target.value) || 4)}
-          className="w-16 text-center h-9"
+          className="w-14 sm:w-16 text-center h-9 px-2"
           disabled={disabled}
         />
       </div>

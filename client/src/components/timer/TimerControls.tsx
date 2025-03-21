@@ -17,25 +17,25 @@ export function TimerControls({
   className,
 }: TimerControlsProps) {
   return (
-    <div className={`flex justify-center space-x-4 ${className}`}>
+    <div className={`flex justify-center space-x-3 sm:space-x-4 ${className}`}>
       {!isRunning ? (
-        <Button onClick={onStart} className="bg-primary hover:bg-primary/90">
-          <PlayIcon className="mr-2 h-4 w-4" />
-          Start
+        <Button onClick={onStart} className="bg-primary hover:bg-primary/90 px-3 sm:px-4">
+          <PlayIcon className="mr-1 sm:mr-2 h-4 w-4" />
+          <span className="text-sm sm:text-base">Start</span>
         </Button>
       ) : (
-        <Button onClick={onPause} className="bg-primary hover:bg-primary/90">
-          <PauseIcon className="mr-2 h-4 w-4" />
-          Pause
+        <Button onClick={onPause} className="bg-primary hover:bg-primary/90 px-3 sm:px-4">
+          <PauseIcon className="mr-1 sm:mr-2 h-4 w-4" />
+          <span className="text-sm sm:text-base">Pause</span>
         </Button>
       )}
       <Button
         onClick={onReset}
         variant="outline"
-        className="border-border"
+        className="border-border px-3 sm:px-4"
       >
-        <RotateCcwIcon className="mr-2 h-4 w-4" />
-        Reset
+        <RotateCcwIcon className="mr-1 sm:mr-2 h-4 w-4" />
+        <span className="text-sm sm:text-base">Reset</span>
       </Button>
     </div>
   );

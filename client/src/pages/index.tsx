@@ -59,8 +59,8 @@ export default function HomePage() {
 
   return (
     <MainLayout>
-      <Card className="max-w-3xl mx-auto">
-        <CardContent className="pt-6">
+      <Card className="max-w-3xl mx-auto overflow-hidden">
+        <CardContent className="pt-6 px-3 sm:px-6">
           {/* Timer Type Selection */}
           <Tabs
             value={timerType}
