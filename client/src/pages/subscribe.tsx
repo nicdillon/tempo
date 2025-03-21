@@ -86,7 +86,7 @@ function SubscriptionForm() {
       <PaymentElement />
       <Button 
         type="submit" 
-        className="w-full bg-primary hover:bg-primary/90" 
+        className="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium" 
         disabled={!stripe || loading}
       >
         {loading ? "Processing..." : "Subscribe Now"}

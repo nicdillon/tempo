@@ -293,7 +293,11 @@ export default function SettingsPage() {
                     <p className="font-medium">{user.username}</p>
                     <p className="text-sm text-muted-foreground">{user.email}</p>
                   </div>
-                  <Button variant="destructive" onClick={logout}>
+                  <Button 
+                    variant="destructive" 
+                    onClick={logout}
+                    className="hover:bg-destructive/90"
+                  >
                     <LogOutIcon className="h-4 w-4 mr-2" />
                     Sign Out
                   </Button>
@@ -357,7 +361,7 @@ export default function SettingsPage() {
             ) : (
               <div className="text-center py-4">
                 <p className="mb-4">You need to be logged in to view account settings</p>
-                <Button asChild>
+                <Button asChild className="bg-primary hover:bg-primary/90">
                   <Link href="/login">Sign In</Link>
                 </Button>
               </div>
