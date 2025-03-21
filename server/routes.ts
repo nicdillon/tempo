@@ -271,6 +271,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/create-subscription", requireAuth, async (req, res) => {
     try {
       if (!stripe || !STRIPE_PRICE_ID) {
+        console.error("Stripe not configured - missing keys:", { 
+          hasStripe: !!stripe, 
+          hasPriceId: !!STRIPE_PRICE_ID
+        });
         return res.status(500).json({ message: "Stripe is not configured" });
       }
       
@@ -278,9 +282,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+
+      console.log("Creating subscription for user:", user.username);
       
       // If user already has a subscription, return it
       if (user.stripeSubscriptionId) {
+        console.log("User already has subscription:", user.stripeSubscriptionId);
         const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
         
         return res.json({
@@ -290,12 +297,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Create a new customer
+      console.log("Creating new Stripe customer with email:", user.email);
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.username,
       });
       
       // Create the subscription
+      console.log("Creating subscription with price ID:", STRIPE_PRICE_ID);
       const subscription = await stripe.subscriptions.create({
         customer: customer.id,
         items: [{
@@ -311,14 +320,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscriptionId: subscription.id
       });
       
+      console.log("Subscription created successfully:", subscription.id);
+      
       res.json({
         subscriptionId: subscription.id,
         clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
       });
     } catch (error: any) {
+      console.error("Stripe subscription error:", error);
       return res.status(400).json({ 
         message: "Error creating subscription", 
-        error: error.message 
+        error: error.message,
+        details: error.toString()
       });
     }
   });
