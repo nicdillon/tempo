@@ -133,11 +133,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: "Not authenticated" });
     }
     
-    const user = await storage.getUser(session.userId);
+    let user = await storage.getUser(session.userId);
     if (!user) {
       session.userId = undefined;
       session.save(() => {});
       return res.status(401).json({ message: "User not found" });
+    }
+    
+    // Check if user has an active subscription but isn't marked as premium
+    // This is important for development environments where webhooks don't work
+    if (stripe && user.stripeSubscriptionId && !user.isSubscribed) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+        if (subscription.status === 'active') {
+          console.log("Found active subscription but user not marked as premium. Updating status...");
+          await storage.updateUserSubscription(user.id, true);
+          // Get updated user data
+          const updatedUser = await storage.getUser(user.id);
+          if (updatedUser) {
+            user = updatedUser;
+          }
+        }
+      } catch (error) {
+        console.error("Error checking subscription status:", error);
+      }
     }
     
     // Remove password from response

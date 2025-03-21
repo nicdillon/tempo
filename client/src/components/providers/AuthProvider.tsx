@@ -33,6 +33,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   register: async () => {},
   logout: async () => {},
+  refreshUser: async () => {},
   isPremium: false,
 });
 
@@ -110,6 +111,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const res = await fetch("/api/auth/me", {
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        const userData = await res.json();
+        setUser(userData);
+        return userData;
+      }
+    } catch (error) {
+      console.error("Error refreshing user data:", error);
+    }
+  };
+
   const logout = async () => {
     try {
       await apiRequest("POST", "/api/auth/logout");
@@ -136,6 +153,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         login,
         register,
         logout,
+        refreshUser,
         isPremium,
       }}
     >
