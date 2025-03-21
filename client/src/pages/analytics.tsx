@@ -29,7 +29,7 @@ const sampleData = {
 };
 
 export default function AnalyticsPage() {
-  const { isPremium } = useAuth();
+  const { user, isPremium } = useAuth();
   
   // Format time functions
   const formatTotalTime = (seconds: number) => {
@@ -44,7 +44,8 @@ export default function AnalyticsPage() {
 
   return (
     <MainLayout>
-      {isPremium ? (
+      {/* For logged-in premium users, show actual data */}
+      {user && isPremium ? (
         <AnalyticsDashboard />
       ) : (
         <div className="space-y-6">
@@ -108,12 +109,23 @@ export default function AnalyticsPage() {
                 <p className="text-muted-foreground mb-6">
                   Get detailed insights into your time usage patterns. Upgrade to premium to see your personal analytics dashboard.
                 </p>
-                <Button asChild className="bg-amber-500 hover:bg-amber-600">
-                  <Link href="/subscribe" className="inline-flex items-center">
-                    Upgrade to Premium
-                    <ArrowRightIcon className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
+                {user ? (
+                  <Button asChild className="bg-amber-500 hover:bg-amber-600">
+                    <Link href="/subscribe" className="inline-flex items-center">
+                      Upgrade to Premium
+                      <ArrowRightIcon className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : (
+                  <div className="flex space-x-4 justify-center">
+                    <Button asChild>
+                      <Link href="/login">Log In</Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link href="/register">Register</Link>
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

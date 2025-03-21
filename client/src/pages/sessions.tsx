@@ -78,7 +78,7 @@ const sampleCategories = [
 ];
 
 export default function SessionsPage() {
-  const { isPremium } = useAuth();
+  const { user, isPremium } = useAuth();
   const { categories } = useCategories();
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
@@ -135,7 +135,8 @@ export default function SessionsPage() {
     };
   };
 
-  if (!isPremium) {
+  // Show demo data for non-premium users (both logged in non-premium and visitors)
+  if (!user || !isPremium) {
     return (
       <MainLayout>
         <div className="space-y-6">
@@ -237,12 +238,23 @@ export default function SessionsPage() {
                 <p className="text-muted-foreground mb-6">
                   Track and review all your timer sessions over time. Upgrade to premium to access your complete session history.
                 </p>
-                <Button asChild className="bg-amber-500 hover:bg-amber-600">
-                  <Link href="/subscribe" className="inline-flex items-center">
-                    Upgrade to Premium
-                    <ArrowRightIcon className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
+                {user ? (
+                  <Button asChild className="bg-amber-500 hover:bg-amber-600">
+                    <Link href="/subscribe" className="inline-flex items-center">
+                      Upgrade to Premium
+                      <ArrowRightIcon className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : (
+                  <div className="flex space-x-4 justify-center">
+                    <Button asChild>
+                      <Link href="/login">Log In</Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link href="/register">Register</Link>
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
