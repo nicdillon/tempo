@@ -5,13 +5,16 @@ import { TimerControls } from "@/components/timer/TimerControls";
 import { CategorySelector } from "@/components/timer/CategorySelector";
 import { PomodoroSettings } from "@/components/timer/PomodoroSettings";
 import { CountdownSettings } from "@/components/timer/CountdownSettings";
+import { TimerMinimal } from "@/components/timer/TimerMinimal";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
-import { useTimer } from "@/hooks/use-timer";
+import { useGlobalTimer } from "@/components/providers/TimerProvider";
 import { useCategories } from "@/hooks/use-categories";
 import { useAuth } from "@/hooks/use-auth";
 import { requestNotificationPermission } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MinimizeIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
   const { user, isPremium } = useAuth();
@@ -35,10 +38,9 @@ export default function HomePage() {
     pauseTimer,
     resetTimer,
     totalCycles,
-  } = useTimer({
-    soundEnabled: true,
-    notificationsEnabled: notificationsPermission,
-  });
+    toggleMinimizedTimer,
+    minimizedTimer
+  } = useGlobalTimer();
 
   // Request notification permission on component mount
   useEffect(() => {
@@ -128,13 +130,34 @@ export default function HomePage() {
           />
 
           {/* Timer Controls */}
-          <TimerControls
-            isRunning={isRunning}
-            onStart={startTimer}
-            onPause={pauseTimer}
-            onReset={resetTimer}
-            className="mb-8"
-          />
+          <div className="flex items-center mb-8">
+            <TimerControls
+              isRunning={isRunning}
+              onStart={startTimer}
+              onPause={pauseTimer}
+              onReset={resetTimer}
+              className="flex-1"
+            />
+            
+            {isRunning && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="ml-2" 
+                onClick={toggleMinimizedTimer}
+              >
+                <MinimizeIcon className="h-4 w-4 mr-2" />
+                Minimize
+              </Button>
+            )}
+          </div>
+          
+          {/* Render the minimal timer if minimized */}
+          {minimizedTimer && isRunning && (
+            <div style={{ display: 'none' }}>
+              <TimerMinimal />
+            </div>
+          )}
 
           {/* Premium Upgrade Prompt (show only for non-premium users) */}
           {user && !isPremium && (
