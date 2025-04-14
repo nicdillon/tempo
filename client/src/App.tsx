@@ -16,6 +16,7 @@ import SessionsPage from "@/pages/sessions";
 import SettingsPage from "@/pages/settings";
 import SubscribePage from "@/pages/subscribe";
 import CheckoutPage from "@/pages/checkout";
+import LandingPage from "@/pages/landing"; // Import the new landing page
 
 function Router() {
   return (
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/settings" component={SettingsPage} />
       <Route path="/subscribe" component={SubscribePage} />
       <Route path="/checkout" component={CheckoutPage} />
+      <Route path="/landing" component={LandingPage} /> {/* Add route for landing page */}
       <Route component={NotFound} />
     </Switch>
   );
