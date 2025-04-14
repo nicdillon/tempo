@@ -7,7 +7,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -32,19 +32,20 @@ export function CategorySelector({
 }: CategorySelectorProps) {
   const { categories, addCategory, isLoading } = useCategories();
   const [open, setOpen] = useState(false);
-  const [newCategory, setNewCategory] = useState({
-    name: "",
-    color: "#FF5252",
-  });
+  const [newCategory, setNewCategory] = useState({ name: "", color: "#FF5252" });
+
+  useEffect(() => {
+
+  })
 
   const handleCreateCategory = () => {
     if (newCategory.name.trim()) {
       addCategory({
         name: newCategory.name,
         color: newCategory.color,
-        isPreset: false,
+        is_preset: false,
       });
-      setNewCategory({ name: "", color: "#FF5252" });
+      setNewCategory(newCategory);
       setOpen(false);
     }
   };

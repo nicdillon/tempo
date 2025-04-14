@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useSupabase } from '@/components/providers/SupabaseProvider';
 
 // Make sure to call `loadStripe` outside of a component's render to avoid
 // recreating the `Stripe` object on every render.
@@ -93,6 +94,7 @@ const CheckoutForm = () => {
 };
 
 export default function CheckoutPage() {
+  const { supabase } = useSupabase(); // Get supabase client
   const [clientSecret, setClientSecret] = useState("");
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -113,7 +115,12 @@ export default function CheckoutPage() {
     // You can modify this to include actual product/order details
     const createPaymentIntent = async () => {
       try {
-        const response = await apiRequest("POST", "/api/create-payment-intent", { 
+        if (!supabase) throw new Error("Supabase client not available");
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        if (!accessToken) throw new Error("Not authenticated");
+
+        const response = await apiRequest(supabase, accessToken, "POST", "/api/create-payment-intent", { 
           amount: 9.99 // This could be passed as a prop or query parameter
         });
         const data = await response.json();

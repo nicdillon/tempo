@@ -1,11 +1,19 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import Stripe from "stripe";
-import session from "express-session";
 import { storage } from "./storage";
-import { insertUserSchema, loginSchema, registerSchema } from "@shared/schema";
+// Use renamed types/schemas from shared/schema
+import { insertProfileSchema, loginSchema, registerSchema, UserProfile, InsertProfile, InsertCategory, InsertTimerSession } from "@shared/schema";
 import { z } from "zod";
+import dotenv from 'dotenv';
+import path, { dirname } from 'path';
+import { fileURLToPath } from "url";
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 // Check for Stripe secret key
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID;
@@ -21,376 +29,402 @@ if (STRIPE_SECRET_KEY) {
   console.warn("Missing STRIPE_SECRET_KEY - payment features will not work");
 }
 
-// Add userId to session data
-declare module 'express-session' {
-  interface SessionData {
-    userId?: number;
+// Add user property to Express Request interface
+declare global {
+  namespace Express {
+    interface Request {
+      user?: { id: string; email?: string;[key: string]: any }; // Supabase user from JWT
+      // localUserId?: number; // No longer needed
+    }
   }
 }
 
+// Initialize Supabase client for backend use
+const supabaseUrl = process.env.VITE_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY; // Use Service Role Key
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error("Missing Supabase URL or Service Key in environment variables.");
+  process.exit(1); // Exit if keys are missing
+}
+
+const supabaseAdmin: SupabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  const requireAuth = (req: Request, res: Response, next: NextFunction) => {
-    const session = req.session as session.Session & { userId?: number };
-    if (!session.userId) {
-      return res.status(401).json({ message: "Unauthorized" });
+
+  // JWT Verification Middleware
+  const verifyJWT = async (req: Request, res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: "Unauthorized: Missing or invalid token" });
     }
-    next();
+
+    const token = authHeader.split(' ')[1];
+
+    try {
+      // Verify JWT using Supabase Admin client
+      const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+      if (error || !user) {
+        console.error("JWT Verification Error:", error?.message);
+        return res.status(401).json({ message: "Unauthorized: Invalid token" });
+      }
+
+      // Attach Supabase user information to the request object
+      req.user = { id: user.id, email: user.email, ...user.user_metadata };
+
+      // Optional: Check if profile exists for this user - useful for ensuring sync
+      const profile = await storage.getUserProfile(user.id); // Use renamed storage method
+      if (!profile) {
+        // This could happen if the user exists in Supabase Auth but not in your profiles table
+        console.error(`Profile not found for Supabase user ID: ${user.id}`);
+        // Depending on flow, you might auto-create profile here or deny access
+        // For now, let's deny access if profile doesn't exist after JWT verification
+        return res.status(401).json({ message: "User profile not found" });
+      }
+
+      next();
+    } catch (err) {
+      console.error("Unexpected error during JWT verification:", err);
+      return res.status(500).json({ message: "Internal server error during authentication" });
+    }
   };
 
-  // Subscription middleware
+  // Subscription middleware (updated to use req.user.id - the Supabase UUID)
   const requireSubscription = async (req: Request, res: Response, next: NextFunction) => {
-    const session = req.session as session.Session & { userId?: number };
-    if (!session.userId) {
-      return res.status(401).json({ message: "Unauthorized" });
+    // Check for user attached by verifyJWT
+    if (!req.user?.id) {
+      return res.status(401).json({ message: "Unauthorized - User not verified" });
     }
 
-    const user = await storage.getUser(session.userId);
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
+    // Fetch profile from storage using the Supabase UUID
+    const profile = await storage.getUserProfile(req.user.id); // Use renamed method
+    if (!profile) {
+      console.error(`Profile with ID ${req.user.id} not found in storage.`);
+      return res.status(401).json({ message: "User profile not found" });
     }
 
-    if (!user.isSubscribed) {
+    if (!profile.is_subscribed) {
       return res.status(403).json({ message: "Subscription required" });
     }
 
     next();
   };
 
-  // ===== Auth Routes =====
-  // Register
+
+  // ===== Auth Routes (Updated - No longer rely on express-session) =====
+  // Register Endpoint - Needs Rework
+  // This endpoint should ideally be called *after* client-side Supabase signup
+  // to create the corresponding profile in the 'profiles' table.
+  // It needs the Supabase User ID from the client.
   app.post("/api/auth/register", async (req, res) => {
+    // TEMPORARY: This endpoint as-is doesn't fit the Supabase Auth flow well.
+    // It attempts to create a local user based on email/password, but auth happens client-side.
+    // A better approach is a dedicated profile creation endpoint called after client signup.
+    // For now, let's assume it receives necessary data (including Supabase ID if flow was adjusted).
     try {
-      const validatedData = registerSchema.parse(req.body);
-      
-      // Check if username already exists
-      const existingUser = await storage.getUserByUsername(validatedData.username);
-      if (existingUser) {
-        return res.status(400).json({ message: "Username already taken" });
+      // Assuming registerSchema is updated or a different schema is used for profile creation
+      // We expect id (Supabase UUID) and email in the body for profile creation
+      const profileSchema = z.object({
+        id: z.string().uuid(),
+        email: z.string().email(),
+      });
+      const validatedData = profileSchema.parse(req.body); // Use profileSchema
+
+      // Check if profile already exists for this ID or email
+      const existingProfileById = await storage.getUserProfile(validatedData.id);
+      const existingProfileByEmail = await storage.getUserProfileByEmail(validatedData.email);
+
+      if (existingProfileById || existingProfileByEmail) {
+        console.warn(`Profile creation attempt for existing user: ${validatedData.email}`);
+        return res.status(200).json(existingProfileById || existingProfileByEmail);
       }
-      
-      const newUser = await storage.createUser(validatedData);
-      
-      // Set session to log in the user
-      req.session.userId = newUser.id;
-      
-      // Remove password from response
-      const { password, ...userResponse } = newUser;
-      
-      res.status(201).json(userResponse);
+
+      // Create profile in your database using data including the Supabase ID
+      // Email is now nullable in the profiles table and not part of InsertProfile type
+      const newProfileData: InsertProfile = {
+        id: validatedData.id,
+        email: validatedData.email, // Remove email - it's not in InsertProfile type anymore
+      };
+      // The createProfile function in storage might need adjustment if it expects email
+      const newProfile = await storage.createProfile(newProfileData); // Pass email separately if needed by storage function
+
+      res.status(201).json(newProfile);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
-      return res.status(500).json({ message: "Error registering user" });
+      console.error("Error processing profile creation:", error);
+      return res.status(500).json({ message: "Error processing profile creation" });
     }
   });
 
-  // Login
+  // Login Endpoint - Likely Redundant for JWT Flow
+  // Client handles Supabase login and gets JWT. This endpoint might only be for checking credentials.
   app.post("/api/auth/login", async (req, res) => {
     try {
       const validatedData = loginSchema.parse(req.body);
-      
-      const user = await storage.getUserByUsername(validatedData.username);
-      if (!user) {
-        return res.status(401).json({ message: "Invalid username or password" });
+
+      // Check if profile exists for the email
+      const profile = await storage.getUserProfileByEmail(validatedData.email); // Use renamed method
+      if (!profile) {
+        // Password check is handled by Supabase client-side login.
+        return res.status(401).json({ message: "Invalid email or password" });
       }
-      
-      if (user.password !== validatedData.password) {
-        return res.status(401).json({ message: "Invalid username or password" });
-      }
-      
-      // Set session
-      req.session.userId = user.id;
-      
-      // Remove password from response
-      const { password, ...userResponse } = user;
-      
-      res.json(userResponse);
+
+      res.json(profile); // Return profile data
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
-      return res.status(500).json({ message: "Error logging in" });
+      console.error("Error during login check:", error);
+      return res.status(500).json({ message: "Error during login check" });
     }
   });
 
-  // Logout
+  // Logout Endpoint - Client handles Supabase logout
   app.post("/api/auth/logout", (req, res) => {
-    req.session.userId = undefined;
-    req.session.save((err) => {
-      if (err) {
-        return res.status(500).json({ message: "Error logging out" });
-      }
-      res.json({ message: "Logged out successfully" });
-    });
+    res.json({ message: "Logout endpoint called (client handles actual Supabase logout)" });
   });
 
-  // Get current user
-  app.get("/api/auth/me", async (req, res) => {
-    const session = req.session as session.Session & { userId?: number };
-    if (!session.userId) {
+  // Get current user profile (Uses JWT verification middleware)
+  app.get("/api/auth/me", verifyJWT, async (req, res) => {
+    if (!req.user?.id) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    
-    let user = await storage.getUser(session.userId);
-    if (!user) {
-      session.userId = undefined;
-      session.save(() => {});
-      return res.status(401).json({ message: "User not found" });
+
+    // Fetch profile from storage using Supabase UUID from JWT
+    let profile = await storage.getUserProfile(req.user.id); // Use renamed method and Supabase ID
+    if (!profile) {
+      console.error(`Profile with ID ${req.user.id} not found in storage.`);
+      return res.status(401).json({ message: "User profile not found" });
     }
-    
-    // Check subscription status
-    // This is important for development environments where webhooks don't work
-    if (stripe && user.stripeSubscriptionId) {
+
+    // Check subscription status (optional sync)
+    if (stripe && profile.stripe_subscription_id) {
       try {
-        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-        
-        // If subscription is active and user isn't marked as premium
-        if (subscription.status === 'active' && !subscription.cancel_at_period_end && !user.isSubscribed) {
-          console.log("Found active subscription but user not marked as premium. Updating status...");
-          await storage.updateUserSubscription(user.id, true);
-          // Get updated user data
-          const updatedUser = await storage.getUser(user.id);
-          if (updatedUser) {
-            user = updatedUser;
-          }
+        const subscription = await stripe.subscriptions.retrieve(profile.stripe_subscription_id);
+        if (subscription.status === 'active' && !subscription.cancel_at_period_end && !profile.is_subscribed) {
+          console.log("Found active subscription but profile not marked as premium. Updating status...");
+          profile = await storage.updateUserSubscription(profile.id, true); // Use profile.id (UUID)
         }
-        
-        // If subscription is cancelled and user is still marked as premium
-        if (subscription.cancel_at_period_end && user.isSubscribed) {
-          console.log("Subscription is canceled but user still marked as premium. Removing premium status...");
-          await storage.updateUserSubscription(user.id, false);
-          // Get updated user data
-          const updatedUser = await storage.getUser(user.id);
-          if (updatedUser) {
-            user = updatedUser;
-          }
+        if (subscription.cancel_at_period_end && profile.is_subscribed) {
+          console.log("Subscription is canceled but profile still marked as premium. Removing premium status...");
+          profile = await storage.updateUserSubscription(profile.id, false); // Use profile.id (UUID)
         }
       } catch (error) {
         console.error("Error checking subscription status:", error);
       }
     }
-    
-    // Remove password from response
-    const { password, ...userResponse } = user;
-    
-    res.json(userResponse);
+
+    res.json(profile);
   });
 
-  // ===== Categories Routes =====
-  // Get categories
-  app.get("/api/categories", requireAuth, async (req, res) => {
-    const categories = await storage.getCategories(req.session.userId!);
+  // ===== Categories Routes (Updated to use verifyJWT) =====
+  app.get("/api/categories", verifyJWT, async (req, res) => {
+    const user_id = req.user!.id; // Supabase UUID
+    const categories = await storage.getCategories(user_id);
     res.json(categories);
   });
 
-  // Create category
-  app.post("/api/categories", requireAuth, async (req, res) => {
+  app.post("/api/categories", verifyJWT, async (req, res) => {
     try {
-      const validatedData = {
+      const user_id = req.user!.id; // Supabase UUID
+      // Validate req.body against a Zod schema for category creation if needed
+      const validatedData: InsertCategory = {
         ...req.body,
-        userId: req.session.userId
+        user_id: user_id // Ensure userId is the Supabase UUID
       };
-      
       const category = await storage.createCategory(validatedData);
       res.status(201).json(category);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      console.error("Error creating category:", error);
       res.status(500).json({ message: "Error creating category" });
     }
   });
 
-  // Delete category
-  app.delete("/api/categories/:id", requireAuth, async (req, res) => {
+  app.delete("/api/categories/:id", verifyJWT, async (req, res) => {
     try {
-      const categoryId = parseInt(req.params.id);
+      const categoryId = parseInt(req.params.id); // Local category ID
+      const userId = req.user!.id; // Supabase UUID
+
       const category = await storage.getCategory(categoryId);
-      
       if (!category) {
         return res.status(404).json({ message: "Category not found" });
       }
-      
-      if (category.userId !== req.session.userId) {
+
+      // Verify ownership using Supabase ID
+      if (category.user_id !== userId) { // Compare with Supabase ID
         return res.status(403).json({ message: "Unauthorized" });
       }
-      
-      await storage.deleteCategory(categoryId);
+
+      await storage.deleteCategory(categoryId); // Delete using local category ID
       res.json({ message: "Category deleted" });
     } catch (error) {
+      console.error("Error deleting category:", error);
       res.status(500).json({ message: "Error deleting category" });
     }
   });
 
-  // ===== Timer Sessions Routes =====
-  // Get timer sessions (requires subscription)
-  app.get("/api/timer-sessions", requireSubscription, async (req, res) => {
+  // ===== Timer Sessions Routes (Updated to use verifyJWT and requireSubscription) =====
+  app.get("/api/timer-sessions", verifyJWT, requireSubscription, async (req, res) => {
     try {
+      const userId = req.user!.id; // Supabase UUID
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
-      const sessions = await storage.getTimerSessions(req.session.userId!, limit);
+      const sessions = await storage.getTimerSessions(userId, limit);
       res.json(sessions);
     } catch (error) {
+      console.error("Error fetching timer sessions:", error);
       res.status(500).json({ message: "Error fetching timer sessions" });
     }
   });
 
-  // Create timer session
-  app.post("/api/timer-sessions", requireAuth, async (req, res) => {
+  app.post("/api/timer-sessions", verifyJWT, async (req, res) => {
     try {
-      // Check if user is subscribed for persistent storage
-      const user = await storage.getUser(req.session.userId!);
-      
-      if (!user?.isSubscribed) {
-        return res.status(403).json({ 
+      const userId = req.user!.id; // Supabase UUID
+
+      // Check if profile is subscribed
+      const profile = await storage.getUserProfile(userId);
+      if (!profile?.is_subscribed) {
+        return res.status(403).json({
           message: "Subscription required to save timer sessions",
           isSubscriptionRequired: true
         });
       }
-      
-      const validatedData = {
+
+      // Validate req.body if needed
+      const validatedData: InsertTimerSession = {
         ...req.body,
-        userId: req.session.userId,
-        startTime: new Date()
+        user_id: userId, // Ensure userId is the Supabase UUID
+        start_time: new Date() // Set startTime on the server
       };
-      
+
       const session = await storage.createTimerSession(validatedData);
       res.status(201).json(session);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      console.error("Error creating timer session:", error);
       res.status(500).json({ message: "Error creating timer session" });
     }
   });
 
-  // Update timer session (mark as completed)
-  app.patch("/api/timer-sessions/:id", requireSubscription, async (req, res) => {
+  app.patch("/api/timer-sessions/:id", verifyJWT, requireSubscription, async (req, res) => {
     try {
-      const sessionId = parseInt(req.params.id);
-      const session = await storage.updateTimerSession(sessionId, {
+      const sessionId = parseInt(req.params.id); // Local session ID
+      const userId = req.user!.id; // Supabase user ID
+
+      // Fetch the session first to verify ownership
+      const existingSessions = await storage.getTimerSessions(userId); // Use Supabase ID
+      const existingSession = existingSessions.find(s => s.id === sessionId);
+
+      if (!existingSession) {
+        return res.status(404).json({ message: "Timer session not found or access denied" });
+      }
+      // Ownership confirmed (since getTimerSessions already filtered by userId)
+
+      // Proceed with update
+      const updatedSession = await storage.updateTimerSession(sessionId, { // Use local session ID
         ...req.body,
-        endTime: req.body.endTime ? new Date(req.body.endTime) : new Date()
+        end_time: req.body.endTime ? new Date(req.body.endTime) : new Date()
       });
-      
-      res.json(session);
+
+      res.json(updatedSession);
     } catch (error) {
+      console.error("Error updating timer session:", error);
       res.status(500).json({ message: "Error updating timer session" });
     }
   });
 
-  // ===== Analytics Routes =====
-  // Get analytics data (requires subscription)
-  app.get("/api/analytics", requireSubscription, async (req, res) => {
+  // ===== Analytics Routes (Updated to use verifyJWT and requireSubscription) =====
+  app.get("/api/analytics", verifyJWT, requireSubscription, async (req, res) => {
     try {
-      const analytics = await storage.getTimerSessionsAnalytics(req.session.userId!);
+      const userId = req.user!.id; // Supabase user ID
+      const analytics = await storage.getTimerSessionsAnalytics(userId);
       res.json(analytics);
     } catch (error) {
+      console.error("Error fetching analytics:", error);
       res.status(500).json({ message: "Error fetching analytics" });
     }
   });
 
-  // ===== Settings Routes =====
-  // Update user preferences
-  app.patch("/api/settings", requireAuth, async (req, res) => {
+  // ===== Settings Routes (Updated to use verifyJWT) =====
+  app.patch("/api/settings", verifyJWT, async (req, res) => {
     try {
-      const user = await storage.updateUserPreferences(req.session.userId!, req.body);
-      const { password, ...userResponse } = user;
-      res.json(userResponse);
+      const userId = req.user!.id; // Supabase user ID
+      // Validate req.body against userPreferencesSchema if needed
+      const profile = await storage.updateUserPreferences(userId, req.body);
+      res.json(profile); // Return updated profile
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      console.error("Error updating settings:", error);
       res.status(500).json({ message: "Error updating settings" });
     }
   });
 
-  // ===== Stripe Routes =====
-  // Create payment intent for one-time payments
-  app.post("/api/create-payment-intent", requireAuth, async (req, res) => {
+  // ===== Stripe Routes (Updated to use verifyJWT) =====
+  app.post("/api/create-payment-intent", verifyJWT, async (req, res) => {
     try {
       if (!stripe) {
         return res.status(500).json({ message: "Stripe is not configured" });
       }
-      
       const { amount } = req.body;
-      
       if (!amount || typeof amount !== 'number') {
         return res.status(400).json({ message: "Invalid amount" });
       }
-      
-      // Create a PaymentIntent with the order amount and currency
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // Convert to cents
+        amount: Math.round(amount * 100),
         currency: "usd",
-        // Add optional params as needed
-        // metadata: { orderId: '...' }
       });
-
-      res.json({
-        clientSecret: paymentIntent.client_secret,
-      });
+      res.json({ clientSecret: paymentIntent.client_secret });
     } catch (error: any) {
       console.error("Error creating payment intent:", error);
-      return res.status(400).json({ 
-        message: "Error creating payment intent", 
-        error: error.message 
-      });
+      return res.status(400).json({ message: "Error creating payment intent", error: error.message });
     }
   });
-  
-  // Cancel subscription
-  app.post("/api/cancel-subscription", requireAuth, async (req, res) => {
+
+  app.post("/api/cancel-subscription", verifyJWT, async (req, res) => {
     try {
       if (!stripe) {
         return res.status(500).json({ message: "Stripe is not configured" });
       }
-      
-      const user = await storage.getUser(req.session.userId!);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
+      const userId = req.user!.id; // Supabase user ID
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) {
+        return res.status(404).json({ message: "User profile not found" });
       }
-      
-      if (!user.stripeSubscriptionId) {
+      if (!profile.stripe_subscription_id) {
         return res.status(400).json({ message: "No active subscription found" });
       }
-      
-      console.log("Canceling subscription:", user.stripeSubscriptionId);
-      
-      // Cancel the subscription in Stripe
-      await stripe.subscriptions.update(user.stripeSubscriptionId, {
-        cancel_at_period_end: true
-      });
-      
-      // We won't update user status immediately anymore
-      // This will happen during profile fetch based on the subscription's cancel_at_period_end flag
-      // await storage.updateUserSubscription(user.id, false);
-      
+      await stripe.subscriptions.update(profile.stripe_subscription_id, { cancel_at_period_end: true });
       res.json({ message: "Subscription canceled successfully" });
     } catch (error: any) {
       console.error("Error canceling subscription:", error);
-      return res.status(400).json({ 
-        message: "Error canceling subscription", 
-        error: error.message 
-      });
+      return res.status(400).json({ message: "Error canceling subscription", error: error.message });
     }
   });
-  
-  // Check subscription status
-  app.get("/api/subscription-status", requireAuth, async (req, res) => {
+
+  app.get("/api/subscription-status", verifyJWT, async (req, res) => {
     try {
       if (!stripe) {
         return res.status(500).json({ message: "Stripe is not configured" });
       }
-      
-      const user = await storage.getUser(req.session.userId!);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
+      const userId = req.user!.id; // Supabase user ID
+      const profile = await storage.getUserProfile(userId);
+      if (!profile) {
+        return res.status(404).json({ message: "User profile not found" });
       }
-      
-      if (!user.stripeSubscriptionId) {
-        return res.json({ 
-          isActive: false,
-          isCancelled: false,
-          message: "No subscription found" 
-        });
+      if (!profile.stripe_subscription_id) {
+        return res.json({ isActive: false, isCancelled: false, message: "No subscription found" });
       }
-      
-      // Get subscription details from Stripe
-      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-      
+      const subscription = await stripe.subscriptions.retrieve(profile.stripe_subscription_id);
       return res.json({
         isActive: subscription.status === 'active',
         isCancelled: subscription.cancel_at_period_end,
@@ -399,168 +433,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Error checking subscription status:", error);
-      return res.status(400).json({ 
-        message: "Error checking subscription status", 
-        error: error.message 
-      });
+      return res.status(400).json({ message: "Error checking subscription status", error: error.message });
     }
   });
 
-  // Create subscription
-  app.post("/api/create-subscription", requireAuth, async (req, res) => {
+  app.post("/api/create-subscription", verifyJWT, async (req, res) => {
     try {
       if (!stripe || !STRIPE_PRICE_ID) {
-        console.error("Stripe not configured - missing keys:", { 
-          hasStripe: !!stripe, 
-          hasPriceId: !!STRIPE_PRICE_ID
-        });
+        console.error("Stripe not configured - missing keys:", { hasStripe: !!stripe, hasPriceId: !!STRIPE_PRICE_ID });
         return res.status(500).json({ message: "Stripe is not configured" });
       }
       
-      const user = await storage.getUser(req.session.userId!);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
+      const userId = req.user!.id; // Supabase user ID
+      const profile = await storage.getUserProfile(userId);
+
+      if (!profile) {
+        return res.status(404).json({ message: "User profile not found" });
       }
 
-      console.log("Creating subscription for user:", user.username);
-      
-      // If user already has a subscription, return it
-      if (user.stripeSubscriptionId) {
-        console.log("User already has subscription:", user.stripeSubscriptionId);
-        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId, {
-          expand: ['latest_invoice.payment_intent']
-        }) as Stripe.Subscription & { 
-          latest_invoice: Stripe.Invoice & { 
-            payment_intent: Stripe.PaymentIntent 
-          } 
-        };
-        
-        // Check if subscription is active but user is not marked as subscribed
-        // This handles the case where webhook didn't trigger (common in development)
-        if (subscription.status === 'active' && !user.isSubscribed) {
-          console.log("Subscription is active but user not marked as premium. Updating status...");
-          await storage.updateUserSubscription(user.id, true);
-          
-          // Send a success response with instructions to reload the page
-          return res.json({
-            subscriptionId: subscription.id,
-            clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
-            premiumActivated: true,
-            message: "Your subscription is active! Premium features are now enabled."
-          });
+      if (profile.stripe_subscription_id) {
+        const subscription = await stripe.subscriptions.retrieve(profile.stripe_subscription_id, { 
+          expand: ['latest_invoice.payment_intent'] 
+        }) as Stripe.Subscription 
+          & { latest_invoice: Stripe.Invoice 
+          & { payment_intent: Stripe.PaymentIntent } };
+        console.log("Subscription...:", subscription)
+        if (subscription.status === 'active' && !profile.is_subscribed) {
+          await storage.updateUserSubscription(profile.id, true);
+          return res.json({ subscriptionId: subscription.id, clientSecret: subscription.latest_invoice?.payment_intent?.client_secret, premiumActivated: true, message: "Your subscription is active! Premium features are now enabled." });
         }
-        
-        return res.json({
-          subscriptionId: subscription.id,
-          clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
-        });
+        return res.json({ subscriptionId: subscription.id, clientSecret: subscription.latest_invoice?.payment_intent?.client_secret });
       }
-      
-      // Create a new customer
-      console.log("Creating new Stripe customer with email:", user.email);
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: user.username,
-      });
-      
-      // Create the subscription
-      console.log("Creating subscription with price ID:", STRIPE_PRICE_ID);
+
+      if (!profile.email)
+        throw Error("Email is required to create a subscription");
+
+      const customer = await stripe.customers.create({ email: profile.email });
       const subscription = await stripe.subscriptions.create({
         customer: customer.id,
-        items: [{
-          price: STRIPE_PRICE_ID,
-        }],
+        items: [{ price: STRIPE_PRICE_ID }],
         payment_behavior: 'default_incomplete',
         expand: ['latest_invoice.payment_intent'],
-      }) as Stripe.Subscription & { 
-        latest_invoice: Stripe.Invoice & { 
-          payment_intent: Stripe.PaymentIntent 
-        } 
-      };
-      
-      // Update user's Stripe info but don't mark as subscribed yet
-      // We'll wait for the webhook to confirm payment success
-      await storage.updateUserStripeInfo(user.id, {
+      }) as Stripe.Subscription & { latest_invoice: Stripe.Invoice & { payment_intent: Stripe.PaymentIntent } };
+
+      await storage.updateUserStripeInfo(profile.id, {
         customerId: customer.id,
         subscriptionId: subscription.id,
-        // Important: Don't mark as subscribed yet until payment is confirmed
-        markAsSubscribed: false
+        markAsSubscribed: true
       });
-      
-      console.log("Subscription created successfully:", subscription.id);
-      
-      res.json({
-        subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
-      });
+
+      res.json({ subscriptionId: subscription.id, clientSecret: subscription.latest_invoice?.payment_intent?.client_secret });
     } catch (error: any) {
       console.error("Stripe subscription error:", error);
-      return res.status(400).json({ 
-        message: "Error creating subscription", 
-        error: error.message,
-        details: error.toString()
-      });
+      return res.status(400).json({ message: "Error creating subscription", error: error.message, details: error.toString() });
     }
   });
 
   // Webhook for stripe events (subscription status updates)
   app.post("/api/webhook", async (req, res) => {
-    if (!stripe) {
-      return res.status(500).json({ message: "Stripe is not configured" });
-    }
-    
+    if (!stripe) { return res.status(500).json({ message: "Stripe is not configured" }); }
     const payload = req.body;
     const event = payload;
-    
     try {
-      // Handle the event
       switch (event.type) {
         case 'customer.subscription.updated':
-        case 'customer.subscription.created':
-          // Update user subscription status
-          const subscription = event.data.object;
-          
-          // Find all users
-          const users = await Promise.all(
-            Array.from({ length: 100 }, (_, i) => i + 1)
-              .map(id => storage.getUser(id))
-          );
-          
-          // Find user with matching subscription ID
-          const user = users
-            .filter(Boolean)
-            .find(u => u?.stripeSubscriptionId === subscription.id);
-          
-          if (user) {
-            await storage.updateUserSubscription(
-              user.id, 
-              subscription.status === 'active'
-            );
+        case 'customer.subscription.created': {
+          const subscription = event.data.object as Stripe.Subscription;
+          // Find profile by stripe customer ID
+          const { data: profile } = await supabaseAdmin.from('profiles').select('id').eq('stripe_customer_id', subscription.customer).single();
+          if (profile) {
+            await storage.updateUserSubscription(profile.id, subscription.status === 'active');
+          } else {
+            console.warn(`Webhook received for unknown customer: ${subscription.customer}`);
           }
           break;
-        case 'customer.subscription.deleted':
-          // Handle subscription cancellation
-          const canceledSubscription = event.data.object;
-          
-          // Find all users
-          const allUsers = await Promise.all(
-            Array.from({ length: 100 }, (_, i) => i + 1)
-              .map(id => storage.getUser(id))
-          );
-          
-          // Find user with matching subscription ID
-          const userToCancel = allUsers
-            .filter(Boolean)
-            .find(u => u?.stripeSubscriptionId === canceledSubscription.id);
-          
-          if (userToCancel) {
-            await storage.updateUserSubscription(userToCancel.id, false);
+        }
+        case 'customer.subscription.deleted': {
+          const canceledSubscription = event.data.object as Stripe.Subscription;
+          // Find profile by stripe customer ID
+          const { data: profile } = await supabaseAdmin.from('profiles').select('id').eq('stripe_customer_id', canceledSubscription.customer).single();
+          if (profile) {
+            await storage.updateUserSubscription(profile.id, false);
+          } else {
+            console.warn(`Webhook received for unknown customer: ${canceledSubscription.customer}`);
           }
           break;
+        }
         default:
           console.log(`Unhandled event type ${event.type}`);
       }
-      
       res.json({ received: true });
     } catch (error) {
       console.error('Error processing webhook', error);

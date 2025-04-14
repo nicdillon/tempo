@@ -2,39 +2,63 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "./use-auth";
 import { useToast } from "./use-toast";
+import { useSupabase } from "@/components/providers/SupabaseProvider";
+import { useEffect, useState } from "react";
 
 interface Category {
   id: number;
-  userId: number;
+  user_id: number;
   name: string;
   color: string;
-  isPreset: boolean;
+  is_preset: boolean;
 }
 
-// Default categories for clients without backend connection
-const defaultCategories = [
-  { id: 1, userId: 0, name: "Work", color: "#FF5252", isPreset: true },
-  { id: 2, userId: 0, name: "Study", color: "#2196F3", isPreset: true },
-  { id: 3, userId: 0, name: "Exercise", color: "#4CAF50", isPreset: true },
-  { id: 4, userId: 0, name: "Break", color: "#FFC107", isPreset: true },
+// Preset categories available to all users
+const presetCategories: Category[] = [
+  { id: -1, user_id: 0, name: "Work", color: "#FF5252", is_preset: true },
+  { id: -2, user_id: 0, name: "Study", color: "#2196F3", is_preset: true },
+  { id: -3, user_id: 0, name: "Exercise", color: "#4CAF50", is_preset: true },
+  { id: -4, user_id: 0, name: "Break", color: "#FFC107", is_preset: true },
 ];
 
 export function useCategories() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { supabase } = useSupabase();
   const queryClient = useQueryClient();
+  const  [accessToken, setAccessToken] = useState("");
 
-  // Fetch categories from API if user is logged in
-  const { data: categories = [], isLoading, error } = useQuery<Category[]>({
+  useEffect(() => {
+    async function fetchAccessToken() {
+      if (!supabase) throw new Error("Supabase client not available");
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) throw new Error("Not authenticated");
+      setAccessToken(accessToken);
+    }
+    fetchAccessToken();
+  }, [supabase])
+
+  // Fetch user-specific categories from API if user is logged in
+  const { data: userCategories = [], isLoading, error } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
-    enabled: !!user,
-    placeholderData: defaultCategories,
+    queryFn: async () => {
+      if (!supabase || !accessToken) return []; // Return empty if not ready
+      const response = await apiRequest(supabase, accessToken, "GET", "/api/categories");
+      if (!response.ok) {
+        throw new Error("Failed to fetch categories");
+      }
+      return response.json();
+    },
+    enabled: !!user && !!supabase && !!accessToken, // Only enable when user, supabase, and token are available
+    initialData: [], // Start with empty, presets are added below
   });
 
   // Add category mutation
   const addCategoryMutation = useMutation({
-    mutationFn: async (category: Omit<Category, "id" | "userId">) => {
-      const response = await apiRequest("POST", "/api/categories", category);
+
+    mutationFn: async (category: Omit<Category, "id" | "user_id">) => {
+      const response = await apiRequest(supabase, accessToken, "POST", "/api/categories", category);
       return response.json();
     },
     onSuccess: () => {
@@ -56,7 +80,7 @@ export function useCategories() {
   // Delete category mutation
   const deleteCategoryMutation = useMutation({
     mutationFn: async (categoryId: number) => {
-      await apiRequest("DELETE", `/api/categories/${categoryId}`);
+      await apiRequest(supabase, accessToken, "DELETE", `/api/categories/${categoryId}`);
       return categoryId;
     },
     onSuccess: (categoryId) => {
@@ -75,7 +99,7 @@ export function useCategories() {
     },
   });
 
-  const addCategory = (category: Omit<Category, "id" | "userId">) => {
+  const addCategory = (category: Omit<Category, "id" | "user_id">) => {
     if (!user) {
       toast({
         title: "Not logged in",
@@ -99,8 +123,20 @@ export function useCategories() {
     deleteCategoryMutation.mutate(categoryId);
   };
 
+  // Combine preset and user categories
+  const combinedCategories = [
+    ...presetCategories,
+    ...(user ? userCategories : []) // Only include user categories if logged in
+  ];
+
+  // Filter out potential duplicates if API returns presets (unlikely but safe)
+  const uniqueCategories = combinedCategories.filter((category, index, self) =>
+    index === self.findIndex((c) => c.name === category.name && c.is_preset === category.is_preset)
+  );
+
+
   return {
-    categories: categories || defaultCategories,
+    categories: uniqueCategories,
     isLoading: isLoading || addCategoryMutation.isPending || deleteCategoryMutation.isPending,
     error,
     addCategory,

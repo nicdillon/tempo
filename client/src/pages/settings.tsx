@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layouts/MainLayout";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/components/providers/AuthProvider"; // Corrected import
 import { useTheme } from "@/hooks/use-theme";
 import { AccentPicker } from "@/components/ui/accentPicker";
 import { requestNotificationPermission, canUseNotifications } from "@/lib/utils";
@@ -38,8 +38,10 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
 import { MoonIcon, SunIcon, MonitorIcon, CrownIcon, LogOutIcon } from "lucide-react";
+import { useSupabase } from "@/components/providers/SupabaseProvider";
 
 export default function SettingsPage() {
+  const { supabase } = useSupabase(); // Get supabase client
   const { user, logout, isPremium, refreshUser } = useAuth();
   const { theme, setTheme, updateUserPreferences } = useTheme();
   const { toast } = useToast();
@@ -53,20 +55,25 @@ export default function SettingsPage() {
   } | null>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [soundNotifications, setSoundNotifications] = useState<boolean>(
-    user?.preferences?.soundNotifications ?? true
+    user?.profile?.preferences?.soundNotifications ?? true // Updated access
   );
   const [browserNotifications, setBrowserNotifications] = useState<boolean>(
-    user?.preferences?.browserNotifications ?? true
+    user?.profile?.preferences?.browserNotifications ?? true // Updated access
   );
   
   // Fetch subscription info if user is premium
   useEffect(() => {
     const fetchSubscriptionInfo = async () => {
-      if (!user?.stripeSubscriptionId) return;
+      if (!user?.profile?.stripeSubscriptionId) return; // Updated access
+
+      if (!supabase) throw new Error("Supabase client not available");
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) throw new Error("Not authenticated");
       
       try {
         setSubscriptionLoading(true);
-        const response = await apiRequest("GET", `/api/subscription-status`);
+        const response = await apiRequest(supabase, accessToken, "GET", `/api/subscription-status`);
         if (response.ok) {
           const data = await response.json();
           setSubscriptionInfo({
@@ -125,8 +132,13 @@ export default function SettingsPage() {
   // Perform the actual cancellation
   const performCancellation = async () => {
     try {
+      if (!supabase) throw new Error("Supabase client not available");
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) throw new Error("Not authenticated");
+
       setCancelLoading(true);
-      const response = await apiRequest('POST', '/api/cancel-subscription');
+      const response = await apiRequest(supabase, accessToken, 'POST', '/api/cancel-subscription');
       
       if (response.ok) {
         toast({
@@ -290,7 +302,7 @@ export default function SettingsPage() {
               <>
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="font-medium">{user.username}</p>
+                    {/* <p className="font-medium">{user.username}</p> */}
                     <p className="text-sm text-muted-foreground">{user.email}</p>
                   </div>
                   <Button 

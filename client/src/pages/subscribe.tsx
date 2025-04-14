@@ -4,7 +4,8 @@ import { loadStripe } from "@stripe/stripe-js";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { MainLayout } from "@/components/layouts/MainLayout";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { useSupabase } from "@/components/providers/SupabaseProvider"; // Import useSupabase
 import { useLocation } from "wouter";
 import {
   Card,
@@ -98,6 +99,7 @@ function SubscriptionForm() {
 export default function SubscribePage() {
   const [clientSecret, setClientSecret] = useState("");
   const { user, isPremium } = useAuth();
+  const { supabase } = useSupabase(); // Get supabase client
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -106,15 +108,20 @@ export default function SubscribePage() {
   
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
-      if (user?.stripeSubscriptionId) {
+      if (user?.profile?.stripeSubscriptionId) {
         try {
-          const response = await apiRequest("GET", `/api/subscription-status`);
+          if (!supabase) throw new Error("Supabase client not available");
+          const { data: { session } } = await supabase.auth.getSession();
+          const accessToken = session?.access_token;
+          if (!accessToken) throw new Error("Not authenticated");
+
+          const response = await apiRequest(supabase, accessToken, "GET", `/api/subscription-status`);
           const data = await response.json();
-          
+
           if (data.isCancelled) {
             // If subscription is cancelled, allow resubscribing
             setIsCancelled(true);
-          } else if (isPremium) {
+          } else if (user?.profile?.is_subscribed) { // Updated property access
             // Only redirect and show toast if premium and not cancelled
             toast({
               title: "Already Subscribed",
@@ -126,6 +133,13 @@ export default function SubscribePage() {
           console.error("Error checking subscription status:", error);
         }
       } else if (isPremium) {
+        // Redirect home if premium with no subscription ID (legacy premium account)
+        toast({
+          title: "Already Subscribed",
+          description: "You are already a premium member",
+        });
+        setLocation("/");
+      } else if (user?.profile?.is_subscribed) { // Updated property access
         // Redirect home if premium with no subscription ID (legacy premium account)
         toast({
           title: "Already Subscribed",
@@ -154,7 +168,12 @@ export default function SubscribePage() {
 
     const createSubscription = async () => {
       try {
-        const response = await apiRequest("POST", "/api/create-subscription");
+        if (!supabase) throw new Error("Supabase client not available");
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        if (!accessToken) throw new Error("Not authenticated");
+
+        const response = await apiRequest(supabase, accessToken, "POST", "/api/create-subscription");
         const data = await response.json();
         setClientSecret(data.clientSecret);
       } catch (error) {

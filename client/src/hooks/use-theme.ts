@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "./use-auth";
 import { apiRequest } from "@/lib/queryClient";
+import { useSupabase } from '../components/providers/SupabaseProvider';
 
 type Theme = "light" | "dark" | "system";
 
 export function useTheme() {
+  const { supabase } = useSupabase(); // Get supabase client
   const { user } = useAuth();
   const [theme, setThemeState] = useState<Theme>(() => {
     // Get theme from localStorage or default to system
@@ -18,9 +20,9 @@ export function useTheme() {
 
   // Initialize theme from user preferences if available
   useEffect(() => {
-    if (user?.preferences) {
-      setThemeState(user.preferences.theme || "system");
-      setAccentColorState(user.preferences.accentColor || "#FF5252");
+    if (user?.profile?.preferences) {
+      setThemeState(user.profile.preferences.theme || "system");
+      setAccentColorState(user.profile.preferences.accentColor || "#FF5252");
     }
   }, [user]);
 
@@ -115,7 +117,12 @@ export function useTheme() {
   ) => {
     if (user) {
       try {
-        await apiRequest("PATCH", "/api/settings", preferences);
+        if (!supabase) throw new Error("Supabase client not available");
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        if (!accessToken) throw new Error("Not authenticated");
+
+        await apiRequest(supabase, accessToken, "PATCH", "/api/settings", preferences);
       } catch (error) {
         console.error("Failed to update user preferences:", error);
       }

@@ -25,7 +25,7 @@ import {
 import { TimerIcon } from "lucide-react";
 
 const loginSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
@@ -38,7 +38,7 @@ export default function LoginPage() {
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      username: "",
+      email: "",
       password: "",
     },
   });
@@ -46,7 +46,7 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     try {
-      await login(data.username, data.password);
+      await login(data.email, data.password);
     } catch (error) {
       // Error is handled in the login function
       console.error("Login error:", error);
@@ -74,12 +74,12 @@ export default function LoginPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="username"
+                name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Username</FormLabel>
+                    <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your-username" {...field} />
+                      <Input placeholder="your@email.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

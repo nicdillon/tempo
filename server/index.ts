@@ -1,24 +1,31 @@
 import express, { type Request, Response, NextFunction } from "express";
-import session from "express-session";
+// import session from "express-session"; // Remove session import
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Set up session middleware
-app.use(session({
-  secret: 'tempo-timer-session-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { 
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
+// REMOVE express-session middleware setup
+// app.use(session({
+//   secret: 'tempo-timer-session-secret',
+//   resave: false,
+//   saveUninitialized: false,
+//   cookie: {
+//     secure: process.env.NODE_ENV === 'production',
+//     maxAge: 24 * 60 * 60 * 1000 // 24 hours
+//   }
+// }));
+
+// Enable CORS - Adjust origin as needed, credentials no longer needed for JWT
+app.use(cors({
+  origin: 'http://localhost:5000', // Keep origin for frontend access
+  // credentials: true, // Remove credentials: true - not needed for JWT Bearer tokens
 }));
 
-app.use((req, res, next) => {
+app.use((req, res, next) => { // Existing logging middleware
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;

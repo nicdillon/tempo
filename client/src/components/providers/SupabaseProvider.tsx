@@ -10,13 +10,16 @@ const SupabaseContext = createContext<SupabaseContextType>({
 });
 
 export const SupabaseProvider = ({ children }: { children: React.ReactNode }) => {
-  // In this implementation, we're not actually instantiating Supabase
-  // since we're using our Express backend for auth and data storage.
+  const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing required environment variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY");
+  }
   // In a real implementation, we would initialize Supabase with:
-  // const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
-  
-  // This provider is left as a placeholder for future integration with Supabase
-  const supabase = null;
+  const supabase = createClient(
+    supabaseUrl, 
+    supabaseAnonKey
+  );
 
   return (
     <SupabaseContext.Provider value={{ supabase }}>

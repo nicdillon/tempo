@@ -25,7 +25,7 @@ import {
 import { TimerIcon } from "lucide-react";
 
 const registerSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
+  // username: z.string().min(3, "Username must be at least 3 characters"),
   email: z.string().email("Please enter a valid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string(),
@@ -43,7 +43,7 @@ export default function RegisterPage() {
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      username: "",
+      // username: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -53,7 +53,7 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterFormValues) => {
     setIsLoading(true);
     try {
-      await register(data.username, data.email, data.password);
+      await register(data.email, data.password);
     } catch (error) {
       // Error is handled in the register function
       console.error("Registration error:", error);
@@ -79,7 +79,7 @@ export default function RegisterPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
+              {/* <FormField
                 control={form.control}
                 name="username"
                 render={({ field }) => (
@@ -91,7 +91,7 @@ export default function RegisterPage() {
                     <FormMessage />
                   </FormItem>
                 )}
-              />
+              /> */}
               <FormField
                 control={form.control}
                 name="email"

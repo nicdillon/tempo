@@ -3,14 +3,47 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Charts } from "@/components/analytics/Charts";
 import { ClockIcon, BarChartIcon, CalendarIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiRequest, queryClient } from "@/lib/queryClient"; // Import queryClient if needed for invalidation, etc.
+import { useSupabase } from "@/components/providers/SupabaseProvider";
+import { AnalyticsData, TimeByCategory, TimeByDayOfWeek } from "@/models/AnalyticsData"; // Import the class and interfaces
+
 
 export function AnalyticsDashboard() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["/api/analytics"],
+  const { supabase } = useSupabase();
+
+  const fetchAnalytics = async (): Promise<AnalyticsData> => {
+    if (!supabase) throw new Error("Supabase client not available");
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+    if (!accessToken) throw new Error("Not authenticated");
+
+    const response = await apiRequest(supabase, accessToken, "GET", `/api/analytics`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: "Failed to fetch analytics" }));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+    const rawData = await response.json();
+    // Validate or transform rawData if necessary before constructing
+    return new AnalyticsData(rawData); // Instantiate the class
+  };
+
+  const { data, isLoading, error } = useQuery<AnalyticsData, Error>({
+    queryKey: ['analytics'],
+    queryFn: fetchAnalytics,
+    enabled: !!supabase, // Only run query when supabase client is available
+    staleTime: 5 * 60 * 1000, // Cache data for 5 minutes
   });
 
   if (isLoading) {
     return <AnalyticsSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8 text-red-600">
+        <p>Error loading analytics: {error.message}</p>
+      </div>
+    );
   }
 
   if (!data) {
@@ -43,7 +76,7 @@ export function AnalyticsDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatTotalTime(data.totalTime)}
+              {formatTotalTime(data.totalTime)} {/* Use data from useQuery */}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Tracked across all sessions
@@ -57,7 +90,7 @@ export function AnalyticsDashboard() {
             <CalendarIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.sessionsCount}</div>
+            <div className="text-2xl font-bold">{data.sessionsCount}</div> {/* Use data from useQuery */}
             <p className="text-xs text-muted-foreground mt-1">
               Total recorded sessions
             </p>
@@ -71,7 +104,7 @@ export function AnalyticsDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {data.timeByCategory.filter(c => c.totalTime > 0).length}
+              {data.timeByCategory.filter((c: TimeByCategory) => c.totalTime > 0).length} {/* Use data from useQuery and type */}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Active timer categories
@@ -80,7 +113,7 @@ export function AnalyticsDashboard() {
         </Card>
       </div>
 
-      {/* Charts */}
+      {/* Charts - Pass the typed data */}
       <Charts data={data} />
     </div>
   );

@@ -12,29 +12,12 @@ import {
   Legend,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AnalyticsData } from "@/models/AnalyticsData"; // Import the class
 
-interface CategoryData {
-  id: number;
-  name: string;
-  color: string;
-  totalTime: number;
-  percentage: number;
-}
-
-interface DayData {
-  day: string;
-  totalTime: number;
-}
-
-interface AnalyticsData {
-  totalTime: number;
-  timeByCategory: CategoryData[];
-  timeByDayOfWeek: DayData[];
-  sessionsCount: number;
-}
+// Local interfaces are no longer needed as we use the imported class
 
 interface ChartsProps {
-  data: AnalyticsData;
+  data: AnalyticsData; // Use the imported class type
 }
 
 export function Charts({ data }: ChartsProps) {

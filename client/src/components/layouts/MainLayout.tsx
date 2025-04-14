@@ -60,14 +60,14 @@ export function MainLayout({ children }: MainLayoutProps) {
                 size="icon"
                 onClick={() => {
                   // Toggle between light and dark regardless of current theme (including system)
-                  const htmlElement = document.documentElement;
-                  const isDark = htmlElement.classList.contains('dark');
-                  setTheme(isDark ? "light" : "dark");
+                  // const htmlElement = document.documentElement;
+                  // const isDark = htmlElement.classList.contains('dark');
+                  setTheme(theme === 'dark' ? "light" : "dark");
                 }}
                 className="mr-2"
-                aria-label={document.documentElement.classList.contains('dark') ? "Switch to light mode" : "Switch to dark mode"}
+                aria-label={theme === 'dark' ? "Switch to light mode" : "Switch to dark mode"}
               >
-                {document.documentElement.classList.contains('dark') ? (
+                {theme === 'light' ? (
                   <SunIcon className="h-5 w-5" />
                 ) : (
                   <MoonIcon className="h-5 w-5" />
@@ -85,7 +85,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                     >
                       <Avatar className="h-8 w-8">
                         <AvatarFallback>
-                          {getInitials(user.username)}
+                          {getInitials(user.profile?.email || '')}
                         </AvatarFallback>
                       </Avatar>
                     </Button>
@@ -93,8 +93,8 @@ export function MainLayout({ children }: MainLayoutProps) {
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>
                       <div className="flex flex-col">
-                        <span>{user.username}</span>
-                        <span className="text-xs text-muted-foreground">{user.email}</span>
+                        <span>{user?.email}</span>
+                        {/* <span className="text-xs text-muted-foreground">{user.email}</span> */}
                         <span className="text-xs font-normal mt-1">
                           {isPremium ? (
                             <span className="text-amber-500">Premium Member</span>

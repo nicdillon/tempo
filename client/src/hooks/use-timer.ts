@@ -3,6 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import { showNotification, playSound } from "@/lib/utils";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { apiRequest } from "@/lib/queryClient";
+import { useSupabase } from '@/components/providers/SupabaseProvider';
 
 type TimerType = "countdown" | "stopwatch" | "pomodoro";
 
@@ -33,20 +34,22 @@ export function useTimer({
     cycles: 4,
   });
   const [categoryId, setCategoryId] = useState<string>("");
-  
+
   // Pomodoro state
   const [pomodoroState, setPomodoroState] = useState<"work" | "break">("work");
   const [currentCycle, setCurrentCycle] = useState(1);
-  
+
   // Session tracking
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
-  
+
   const intervalRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const { toast } = useToast();
   const { user, isPremium } = useAuth();
+  const { supabase } = useSupabase();
+  const [accessToken, setAccessToken] = useState("");
 
   // Calculate total time for countdown
   const calculateTotalSeconds = useCallback(() => {
@@ -90,6 +93,17 @@ export function useTimer({
   useEffect(() => {
     resetTimer();
   }, [timerType, resetTimer]);
+
+  useEffect(() => {
+    async function fetchAccessToken() {
+      if (!supabase) throw new Error("Supabase client not available");
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) throw new Error("Not authenticated");
+      setAccessToken(accessToken);
+    }
+    fetchAccessToken();
+  }, [supabase]);
 
   // Update timer
   const updateTimer = useCallback(() => {
@@ -137,27 +151,27 @@ export function useTimer({
     // Save session if user is premium
     if (user && isPremium) {
       try {
-        const response = await apiRequest("POST", "/api/timer-sessions", {
+        const response = await apiRequest(supabase, accessToken, "POST", "/api/timer-sessions", {
           categoryId: parseInt(categoryId),
-          timerType,
-          duration: 
-            timerType === "countdown" 
-              ? calculateTotalSeconds() 
+          timer_type: timerType,
+          duration:
+            timerType === "countdown"
+              ? calculateTotalSeconds()
               : timerType === "pomodoro"
-              ? pomodoroSettings.workMinutes * 60 * pomodoroSettings.cycles +
+                ? pomodoroSettings.workMinutes * 60 * pomodoroSettings.cycles +
                 pomodoroSettings.breakMinutes * 60 * (pomodoroSettings.cycles - 1)
-              : 0,
-          pomodoroData: 
-            timerType === "pomodoro" 
+                : 0,
+          pomodoro_data:
+            timerType === "pomodoro"
               ? {
-                  workMinutes: pomodoroSettings.workMinutes,
-                  breakMinutes: pomodoroSettings.breakMinutes,
-                  cycles: pomodoroSettings.cycles,
-                  completedCycles: 0,
-                }
+                workMinutes: pomodoroSettings.workMinutes,
+                breakMinutes: pomodoroSettings.breakMinutes,
+                cycles: pomodoroSettings.cycles,
+                completedCycles: 0,
+              }
               : null,
         });
-        
+
         const session = await response.json();
         setSessionId(session.id);
         setSessionStartTime(new Date());
@@ -215,9 +229,9 @@ export function useTimer({
 
     // Update session if exists
     if (sessionId) {
-      apiRequest("PATCH", `/api/timer-sessions/${sessionId}`, {
+      apiRequest(supabase, accessToken, "PATCH", `/api/timer-sessions/${sessionId}`, {
         completed: true,
-        endTime: new Date(),
+        end_time: new Date(),
       }).catch(console.error);
     }
 
@@ -244,18 +258,18 @@ export function useTimer({
       // Work phase complete, start break
       setPomodoroState("break");
       setDisplayTime(pomodoroSettings.breakMinutes * 60);
-      
+
       if (soundEnabled) {
         playSound("https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3");
       }
-      
+
       if (notificationsEnabled) {
         showNotification("Break Time", {
           body: "Work session complete! Time for a break.",
           icon: "/favicon.ico",
         });
       }
-      
+
       toast({
         title: "Work Complete",
         description: "Time for a break!",
@@ -263,7 +277,7 @@ export function useTimer({
     } else {
       // Break phase complete
       setCurrentCycle((prev) => prev + 1);
-      
+
       if (currentCycle >= pomodoroSettings.cycles) {
         // All cycles complete
         completeTimer();
@@ -271,30 +285,30 @@ export function useTimer({
         // Start next work phase
         setPomodoroState("work");
         setDisplayTime(pomodoroSettings.workMinutes * 60);
-        
+
         if (soundEnabled) {
           playSound("https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3");
         }
-        
+
         if (notificationsEnabled) {
           showNotification("Work Time", {
             body: "Break over! Back to work.",
             icon: "/favicon.ico",
           });
         }
-        
+
         toast({
           title: "Break Complete",
           description: "Back to work!",
         });
       }
     }
-    
+
     // Reset the timer interval
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
-    
+
     startTimeRef.current = Date.now();
     intervalRef.current = window.setInterval(() => {
       updateTimer();

@@ -152,8 +152,6 @@ export default function HomePage() {
             )}
           </div>
           
-          {/* Minimized timer is now handled by GlobalTimerDisplay component */}
-
           {/* Premium Upgrade Prompt (show only for non-premium users) */}
           {user && !isPremium && (
             <UpgradePrompt className="mt-8" />
