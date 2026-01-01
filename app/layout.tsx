@@ -11,8 +11,8 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Next.js and Supabase Starter Kit",
-  description: "The fastest way to build apps with Next.js and Supabase",
+  title: "Tempo",
+  description: "Track your time with Tempo",
 };
 
 const geistSans = Geist({
@@ -45,7 +45,7 @@ export default function RootLayout({
                 {children}
               </div>
               <footer className="w-full flex items-center justify-center border-t mx-auto text-center text-xs gap-8 py-16">
-                // footer content
+                {/* footer content*/}
               </footer>
             </div>
           </main>
